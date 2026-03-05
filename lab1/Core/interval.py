@@ -13,6 +13,7 @@ class Interval:
 
     @property
     def width(self) -> decimal.Decimal:
+        """Ширина интервала"""
         return self.high - self.low
     
     def __repr__(self) -> str:

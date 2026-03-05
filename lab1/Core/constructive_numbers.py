@@ -2,7 +2,7 @@ import decimal
 from abc import ABC, abstractmethod
 import warnings
 
-from interval import Interval
+from .interval import Interval
 
 class ConstructiveNumber(ABC):
     """Базовый класс графа ленивых вычислений"""
@@ -12,6 +12,7 @@ class ConstructiveNumber(ABC):
         self._cached_interval: Interval | None = None
 
     def evaluate(self, precision_digits: int) -> Interval:
+        """Метод, возвращающий интервал с точностью `precision_digits`"""
         if self._cached_prec >= precision_digits and self._cached_interval:
             return self._cached_interval
         
@@ -23,6 +24,7 @@ class ConstructiveNumber(ABC):
 
     @abstractmethod
     def _do_evaluate(self, precision_digits: int) -> Interval:
+        """Метод, высчитывающий интервалы с точностью `precision_digits`"""
         pass
 
     def _compare(
@@ -30,6 +32,7 @@ class ConstructiveNumber(ABC):
         other: 'ConstructiveNumber',
         op_type: str
     ) -> bool:
+        """Вспомогательный метод для сравнений двух `ConstructiveNumber`"""
         prec = 10
         max_prec = 2000
 
@@ -65,6 +68,7 @@ class ConstructiveNumber(ABC):
         self,
         val: 'ConstructiveNumber | int | float'
     ) -> 'ConstructiveNumber':
+        """Метод, который проверяет, либо заменяет на `ConstructiveNumber`"""
         if isinstance(val, ConstructiveNumber):
             return val
         return CNConstant(val)
@@ -125,6 +129,7 @@ class ConstructiveNumber(ABC):
     
 
 class CNConstant(ConstructiveNumber):
+    """Класс константы"""
 
     def __init__(
         self,
@@ -139,6 +144,7 @@ class CNConstant(ConstructiveNumber):
 
 
 class CNAdd(ConstructiveNumber):
+    """Класс сложения"""
 
     def __init__(
         self,
@@ -158,6 +164,7 @@ class CNAdd(ConstructiveNumber):
 
 
 class CNSub(ConstructiveNumber):
+    """Класс вычитания"""
     
     def __init__(
         self,
@@ -177,6 +184,7 @@ class CNSub(ConstructiveNumber):
 
 
 class CNMul(ConstructiveNumber):
+    """Класс умножения"""
     
     def __init__(
         self,
@@ -203,6 +211,7 @@ class CNMul(ConstructiveNumber):
 
 
 class CNDiv(ConstructiveNumber):
+    """Класс деления"""
     
     def __init__(
         self,
@@ -232,6 +241,7 @@ class CNDiv(ConstructiveNumber):
 
 
 class CNPow(ConstructiveNumber):
+    """Класс возведения в степень"""
     
     def __init__(
         self,
@@ -273,6 +283,7 @@ class CNPow(ConstructiveNumber):
 
 
 class CNLog(ConstructiveNumber):
+    """Класс натурального логарифма"""
 
     def __init__(self, arg: ConstructiveNumber) -> None:
         super().__init__()
@@ -290,6 +301,7 @@ class CNLog(ConstructiveNumber):
 
 
 class CNExp(ConstructiveNumber):
+    """Класс экспоненты"""
 
     def __init__(self, arg: ConstructiveNumber) -> None:
         super().__init__()
@@ -307,5 +319,5 @@ def cn_ln(x: ConstructiveNumber) -> ConstructiveNumber:
     return CNLog(x)
 
 
-def cn_exp(x: ConstructiveNumber) -> ConstructiveNumber:
+def cn_exp(x: ConstructiveNumber) -> ConstructiveNumber: 
     return CNExp(x)
