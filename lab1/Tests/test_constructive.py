@@ -85,11 +85,11 @@ class TestConsctuctiveNumbers(unittest.TestCase):
         b = CNConstant(5)
         c = CNConstant(2)
         d = CNConstant(3)
-        e = CNConstant(1)
+        e = CNConstant(9)
         
-        tree = ((a + b) * (c ** d)) - CNExp(e)
+        tree = ((a + b) * (c ** d)) - CNLog(e)
         
-        expected_str = "(((10 + 5) * (2 ** 3)) - exp(1))"
+        expected_str = "(((10 + 5) * (2 ** 3)) - ln(9))"
         self.assertEqual(str(tree), expected_str)
 
         tree2 = CNLog(a) / b

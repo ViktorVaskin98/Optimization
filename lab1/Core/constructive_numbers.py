@@ -27,6 +27,11 @@ class ConstructiveNumber(ABC):
         """Метод, высчитывающий интервалы с точностью `precision_digits`"""
         pass
 
+    @abstractmethod
+    def __str__(self) -> str:
+        """Красивое строковое представление узла дерева"""
+        pass
+
     def _compare(
         self,
         other: 'ConstructiveNumber',
@@ -126,7 +131,6 @@ class ConstructiveNumber(ABC):
         power: 'ConstructiveNumber | int | float'
     ) -> 'CNPow':
         return CNPow(self, self._ensure_cn(power))
-    
 
 class CNConstant(ConstructiveNumber):
     """Класс константы"""
