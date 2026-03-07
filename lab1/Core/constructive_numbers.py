@@ -6,9 +6,11 @@ from .interval import Interval
 
 class ConstructiveNumber(ABC):
     """Базовый класс графа ленивых вычислений"""
+    _global_version: int = 0
 
     def __init__(self) -> None:
         self._cached_prec: int = -1
+        self._cached_version: int = -1
         self._cached_interval: Interval | None = None
 
     def evaluate(self, precision_digits: int) -> Interval:
@@ -19,40 +21,26 @@ class ConstructiveNumber(ABC):
 
     def _caching_evaluate(self, precision_digits: int) -> Interval:
         """Рекурсивные метод, возвращающий интервал с точностью `precision_digits`"""
-        if self._cached_prec >= precision_digits and self._cached_interval:
+        if (self._cached_prec >= precision_digits
+            and self._cached_version == ConstructiveNumber._global_version
+            and self._cached_interval):
             return self._cached_interval
         
         result = self._do_evaluate(precision_digits)
 
         self._cached_prec = precision_digits
         self._cached_interval = result
+        self._cached_version = ConstructiveNumber._global_version
         return result
-    
-    def _is_const_val(
+
+    def _ensure_cn(
         self,
-        val: str | float | int
-    ) -> bool:
-        return isinstance(self, CNConstant) and self.val == decimal.Decimal(str(val))
-    
-    @abstractmethod
-    def derivative(self, var: 'CNVariable') -> 'ConstructiveNumber':
-        """Возвращает новое дерево, которое является производной по переменной var"""
-        pass
-
-    @abstractmethod
-    def simplify(self) -> 'ConstructiveNumber':
-        """Возвращает новое, упрощенное дерево"""
-        pass
-
-    @abstractmethod
-    def _do_evaluate(self, precision_digits: int) -> Interval:
-        """Метод, высчитывающий интервалы с точностью `precision_digits`"""
-        pass
-
-    @abstractmethod
-    def __str__(self) -> str:
-        """Красивое строковое представление узла дерева"""
-        pass
+        val: 'ConstructiveNumber | decimal.Decimal | str | float | int'
+    ) -> 'ConstructiveNumber':
+        """Метод, который проверяет, либо заменяет на `ConstructiveNumber`"""
+        if isinstance(val, ConstructiveNumber):
+            return val
+        return CNConstant(val)
 
     def _compare(
         self,
@@ -79,78 +67,85 @@ class ConstructiveNumber(ABC):
         
         warnings.warn(f'Числа неразличимы с точностью {max_prec}')
         return False
+
+    @abstractmethod
+    def _do_evaluate(self, precision_digits: int) -> Interval:
+        """Метод, высчитывающий интервалы с точностью `precision_digits`"""
+        pass
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Красивое строковое представление узла дерева"""
+        pass
     
-    def __lt__(self, other: 'ConstructiveNumber') -> bool:
-        return self._compare(other, '<')
+    def __lt__(
+        self,
+        other: 'ConstructiveNumber | str | float | int'
+    ) -> bool:
+        return self._compare(self._ensure_cn(other), '<')
     
-    def __gt__(self, other: 'ConstructiveNumber') -> bool:
-        return self._compare(other, '>')
+    def __gt__(
+        self,
+        other: 'ConstructiveNumber | str | float | int'
+    ) -> bool:
+        return self._compare(self._ensure_cn(other), '>')
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ConstructiveNumber):
             return NotImplemented
         return self._compare(other, '==')
     
-    def _ensure_cn(
-        self,
-        val: 'ConstructiveNumber | int | float'
-    ) -> 'ConstructiveNumber':
-        """Метод, который проверяет, либо заменяет на `ConstructiveNumber`"""
-        if isinstance(val, ConstructiveNumber):
-            return val
-        return CNConstant(val)
-    
     def __add__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNAdd':
         return CNAdd(self, self._ensure_cn(other))
     
     def __radd__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNAdd':
         return CNAdd(self._ensure_cn(other), self)
     
     def __sub__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNSub':
         return CNSub(self, self._ensure_cn(other))
     
     def __rsub__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNSub':
         return CNSub(self._ensure_cn(other), self)
     
     def __mul__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNMul':
         return CNMul(self, self._ensure_cn(other))
     
     def __rmul__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNMul':
         return CNMul(self._ensure_cn(other), self)
     
     def __truediv__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNDiv':
         return CNDiv(self, self._ensure_cn(other))
     
     def __rtruediv__(
         self,
-        other: 'ConstructiveNumber | int | float'
+        other: 'ConstructiveNumber | str | float | int'
     ) -> 'CNDiv':
         return CNDiv(self._ensure_cn(other), self)
     
     def __pow__(
         self,
-        power: 'ConstructiveNumber | int | float'
+        power: 'ConstructiveNumber | str | float | int'
     ) -> 'CNPow':
         return CNPow(self, self._ensure_cn(power))
 
@@ -160,16 +155,10 @@ class CNConstant(ConstructiveNumber):
 
     def __init__(
         self,
-        val: str | int | float
+        val: decimal.Decimal | str | int | float
     ) -> None:
         super().__init__()
         self.val = decimal.Decimal(str(val))
-
-    def derivative(self, var: 'CNVariable') -> ConstructiveNumber:
-        return  CNConstant(0)
-    
-    def simplify(self) -> ConstructiveNumber:
-        return self
     
     def _do_evaluate(self, precision_digits: int) -> Interval:
         return Interval(self.val, self.val)
@@ -184,7 +173,7 @@ class CNVariable(ConstructiveNumber):
     def __init__(
         self,
         name: str,
-        initial_val: str | float | int | None = None
+        initial_val: decimal.Decimal | str | float | int | None = None
     ) -> None:
         super().__init__()
         self.name = name
@@ -201,14 +190,7 @@ class CNVariable(ConstructiveNumber):
         self.val = decimal.Decimal(new_val)
         self._cached_prec = -1
         self._cached_interval = None
-
-    def derivative(self, var: 'CNVariable') -> ConstructiveNumber:
-        if self is var:
-            return CNConstant(1)
-        return CNConstant(0)
-    
-    def simplify(self) -> ConstructiveNumber:
-        return self
+        ConstructiveNumber._global_version += 1
 
     def _do_evaluate(self, precision_digits: int) -> Interval:
         return Interval(self.val, self.val)
@@ -229,22 +211,19 @@ class CNAdd(ConstructiveNumber):
         self.left = left
         self.right = right
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        return self.left.derivative(var) + self.right.derivative(var)
-    
-    def simplify(self) -> ConstructiveNumber:
-        l = self.left.simplify()
-        r = self.right.simplify()
-
-        if l._is_const_val(0): return r
-        if r._is_const_val(0): return l
-
-        return l + r
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i1 = self.left._caching_evaluate(precision_digits)
         i2 = self.right._caching_evaluate(precision_digits)
-        return Interval(i1.low + i2.low, i1.high + i2.high)
+
+        ctx = decimal.getcontext()
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        new_low = i1.low + i2.low
+
+        ctx.rounding = decimal.ROUND_CEILING
+        new_high = i1.high + i2.high
+
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"({self.left} + {self.right})"
@@ -262,25 +241,19 @@ class CNSub(ConstructiveNumber):
         self.left = left
         self.right = right
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        return self.left.derivative(var) - self.right.derivative(var)
-    
-    def simplify(self) -> ConstructiveNumber:
-        l = self.left.simplify()
-        r = self.right.simplify()
-
-        if r._is_const_val(0): return l
-        if l._is_const_val(0): return CNConstant(0) - r
-
-        if isinstance(l, CNVariable) and isinstance(r, CNVariable) and l.name == r.name:
-            return CNConstant(0)
-        
-        return l - r
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i1 = self.left._caching_evaluate(precision_digits)
         i2 = self.right._caching_evaluate(precision_digits)
-        return Interval(i1.low - i2.high, i1.high - i2.low)
+        
+        ctx = decimal.getcontext()
+        
+        ctx.rounding = decimal.ROUND_FLOOR
+        new_low = i1.low - i2.high
+        
+        ctx.rounding = decimal.ROUND_CEILING
+        new_high = i1.high - i2.low
+        
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"({self.left} - {self.right})"
@@ -298,31 +271,27 @@ class CNMul(ConstructiveNumber):
         self.left = left
         self.right = right
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        return (self.left.derivative(var) * self.right) + (self.left * self.right.derivative(var))
-    
-    def simplify(self) -> ConstructiveNumber:
-        l = self.left.simplify()
-        r = self.right.simplify()
-
-        if l._is_const_val(0) or r._is_const_val(0): return CNConstant(0)
-
-        if l._is_const_val(1): return r
-        if r._is_const_val(1): return l
-
-        return l * r
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i1 = self.left._caching_evaluate(precision_digits)
         i2 = self.right._caching_evaluate(precision_digits)
+        
+        ctx = decimal.getcontext()
 
-        coords = [
-            i1.low * i2.low,
-            i1.low * i2.high,
-            i1.high * i2.low,
-            i1.high * i2.high
+        ctx.rounding = decimal.ROUND_FLOOR
+        low_candidates = [
+            i1.low * i2.low, i1.low * i2.high, 
+            i1.high * i2.low, i1.high * i2.high
         ]
-        return Interval(min(coords), max(coords))
+        new_low = min(low_candidates)
+
+        ctx.rounding = decimal.ROUND_CEILING
+        high_candidates = [
+            i1.low * i2.low, i1.low * i2.high, 
+            i1.high * i2.low, i1.high * i2.high
+        ]
+        new_high = max(high_candidates)
+        
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"({self.left} * {self.right})"
@@ -340,26 +309,6 @@ class CNDiv(ConstructiveNumber):
         self.left = left
         self.right = right
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        u = self.left
-        v = self.right
-        u_prime = u.derivative(var)
-        v_prime = v.derivative(var)
-
-        numerator = (u_prime * v) - (u * v_prime)
-        denominator = v ** CNConstant(2)
-
-        return numerator / denominator
-    
-    def simplify(self) -> ConstructiveNumber:
-        l = self.left.simplify()
-        r = self.right.simplify()
-
-        if l._is_const_val(0): return CNConstant(0)
-        if r._is_const_val(1): return l
-
-        return l / r
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i1 = self.left._caching_evaluate(precision_digits)
         i2 = self.right._caching_evaluate(precision_digits)
@@ -367,13 +316,23 @@ class CNDiv(ConstructiveNumber):
         if i2.low <= 0 <= i2.high:
             raise ValueError('Деление на интервал, содержащий ноль')
         
-        coords = [
-            i1.low / i2.low,
-            i1.low / i2.high,
-            i1.high / i2.low,
-            i1.high / i2.high
+        ctx = decimal.getcontext()
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        low_candidates = [
+            i1.low / i2.low, i1.low / i2.high, 
+            i1.high / i2.low, i1.high / i2.high
         ]
-        return Interval(min(coords), max(coords))
+        new_low = min(low_candidates)
+
+        ctx.rounding = decimal.ROUND_CEILING
+        high_candidates = [
+            i1.low / i2.low, i1.low / i2.high, 
+            i1.high / i2.low, i1.high / i2.high
+        ]
+        new_high = max(high_candidates)
+        
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"({self.left} / {self.right})"
@@ -391,58 +350,64 @@ class CNPow(ConstructiveNumber):
         self.base = base
         self.power = power
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        u = self.base
-        v = self.power
-        u_prime = u.derivative(var)
-        v_prime = v.derivative(var)
-
-        if isinstance(v, CNConstant):
-            return v * (u ** (v - CNConstant(1))) * u_prime
-        
-        if isinstance(u, CNConstant):
-            return self * cn_ln(u) * v_prime
-
-        part1 = v_prime * cn_ln(u)
-        part2 = v * u_prime / u
-        return self * (part1 + part2)
-    
-    def simplify(self) -> ConstructiveNumber:
-        b = self.base.simplify()
-        p = self.power.simplify()
-
-        if p._is_const_val(0): return CNConstant(1)
-        if p._is_const_val(1): return b
-        if b._is_const_val(0): return CNConstant(0)
-        if b._is_const_val(1): return CNConstant(1)
-
-        return b ** p
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         if isinstance(self.power, CNConstant) and self.power.val == self.power.val.to_integral_value():
             int_power = int(self.power.val)
             i = self.base._caching_evaluate(precision_digits)
 
+            if int_power < 0 and i.low <= 0 <= i.high:
+                raise ValueError('Возведение нуля в отрицательную степень')
+
+            ctx = decimal.getcontext()
+
             if int_power % 2 == 0 and i.low < 0 < i.high:
-                low_bound = 0
-                high_bound = max(i.low ** int_power, i.high ** int_power)
+                new_low = decimal.Decimal(0) # Минимум параболы всегда 0
+                
+                ctx.rounding = decimal.ROUND_CEILING
+                new_high = max(i.low ** int_power, i.high ** int_power)
+            
             else:
-                c1 = i.low ** int_power
-                c2 = i.high ** int_power
-                low_bound, high_bound = min(c1, c2), max(c1, c2)
+                ctx.rounding = decimal.ROUND_FLOOR
+                low_cands = [i.low ** int_power, i.high ** int_power]
+                new_low = min(low_cands)
 
-            return Interval(low_bound, high_bound)
+                ctx.rounding = decimal.ROUND_CEILING
+                high_cands = [i.low ** int_power, i.high ** int_power]
+                new_high = max(high_cands)
+
+            return Interval(new_low, new_high)
         
-        ln_base = CNLog(self.base)._caching_evaluate(precision_digits)
-        power_interval = self.power._caching_evaluate(precision_digits)
+        base_int = self.base._caching_evaluate(precision_digits)
+        pow_int = self.power._caching_evaluate(precision_digits)
 
-        coords = [
-            ln_base.low * power_interval.low,
-            ln_base.low * power_interval.high,
-            ln_base.high * power_interval.low,
-            ln_base.high * power_interval.high
-        ]
-        return Interval(min(coords).exp(), max(coords).exp())
+        if base_int.low <= 0:
+             raise ValueError('Возведение неположительного числа в нецелую степень')
+
+        ctx = decimal.getcontext()
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        ln_low = base_int.low.ln()
+        ctx.rounding = decimal.ROUND_CEILING
+        ln_high = base_int.high.ln()
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        prod_low = min(
+            ln_low * pow_int.low, ln_low * pow_int.high,
+            ln_high * pow_int.low, ln_high * pow_int.high
+        )
+        ctx.rounding = decimal.ROUND_CEILING
+        prod_high = max(
+            ln_low * pow_int.low, ln_low * pow_int.high,
+            ln_high * pow_int.low, ln_high * pow_int.high
+        )
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        final_low = prod_low.exp()
+
+        ctx.rounding = decimal.ROUND_CEILING
+        final_high = prod_high.exp()
+
+        return Interval(final_low, final_high)
     
     def __str__(self) -> str:
         return f"({self.base} ** {self.power})"
@@ -455,23 +420,21 @@ class CNLog(ConstructiveNumber):
         super().__init__()
         self.arg = arg
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        return self.arg.derivative(var) / self.arg
-    
-    def simplify(self) -> ConstructiveNumber:
-        a = self.arg.simplify()
-
-        if a._is_const_val(1): return CNConstant(0)
-
-        return CNLog(a)
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i = self.arg._caching_evaluate(precision_digits)
 
         if i.low <= 0:
             raise ValueError('Логарифм от неположительного числа')
         
-        return Interval(i.low.ln(), i.high.ln())
+        ctx = decimal.getcontext()
+        
+        ctx.rounding = decimal.ROUND_FLOOR
+        new_low = i.low.ln()
+
+        ctx.rounding = decimal.ROUND_CEILING
+        new_high = i.high.ln()
+        
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"ln({self.arg})"
@@ -484,19 +447,18 @@ class CNExp(ConstructiveNumber):
         super().__init__()
         self.arg = arg
 
-    def derivative(self, var: CNVariable) -> ConstructiveNumber:
-        return self * self.arg.derivative(var)
-    
-    def simplify(self) -> ConstructiveNumber:
-        a = self.arg.simplify()
-
-        if a._is_const_val(0): return CNConstant(1)
-
-        return CNExp(a)
-
     def _do_evaluate(self, precision_digits: int) -> Interval:
         i = self.arg._caching_evaluate(precision_digits)
-        return Interval(i.low.exp(), i.high.exp())
+        
+        ctx = decimal.getcontext()
+
+        ctx.rounding = decimal.ROUND_FLOOR
+        new_low = i.low.exp()
+
+        ctx.rounding = decimal.ROUND_CEILING
+        new_high = i.high.exp()
+        
+        return Interval(new_low, new_high)
     
     def __str__(self) -> str:
         return f"exp({self.arg})"
