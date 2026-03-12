@@ -185,7 +185,7 @@ class CNVariable(ConstructiveNumber):
 
     def set_val(
         self,
-        new_val: str | float | int
+        new_val: decimal.Decimal | str | float | int
     ) -> None:
         self.val = decimal.Decimal(new_val)
         self._cached_prec = -1

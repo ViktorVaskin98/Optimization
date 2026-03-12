@@ -25,32 +25,35 @@ class BaseOptimizer(ABC):
         variables: List[CNVariable],
         verbose: bool = False
     ) -> Dict:
-        self._initialize(variables)
+        decimal.getcontext().prec = self.precision_digits
 
+        self._initialize(variables)
         ast_data = self._build_gradients(target_func, variables)
         
-        point_history = [[float(var.val) for var in variables]]
+        point_history = [[var.val for var in variables]]
         loss_history = []
 
         for t in range(1, self.max_iter + 1):
-            current_loss = float(target_func.evaluate(self.precision_digits).middle)
-            loss_history.append(current_loss)
+            loss_interval = target_func.evaluate(self.precision_digits)
+            loss_history.append(loss_interval.middle)
 
-            current_grads, max_grad_norm = self._compute_gradients(ast_data, variables, t)
+            current_grads_mid, max_grad_norm, is_perfect_stop = self._compute_gradients(ast_data, variables, t)
             
             if verbose and t % 100 == 0:
-                print(f"Итерация {t}/{self.max_iter} | Значение функции: {current_loss:.6f} | Макс. градиент: {float(max_grad_norm):.6f}")
+                print(f"Итерация {t}/{self.max_iter} | Loss: {float(loss_interval.middle):.10f} | Max Grad: {float(max_grad_norm):.10f}")
 
             if max_grad_norm < self.tolerance:
                 if verbose:
                     print(f"Сходится на итерации {t}!")
+                    if is_perfect_stop:
+                        print("Глобальный минимум математически доказан (0 внутри интервала градиента).")
                 break
             
-            steps = self._calculate_steps(current_grads, t)
+            steps = self._calculate_steps(current_grads_mid, t)
             new_point = self._take_step(variables, steps)
             point_history.append(new_point)
 
-        final_loss = float(target_func.evaluate(self.precision_digits).middle)
+        final_loss = target_func.evaluate(self.precision_digits).middle
         loss_history.append(final_loss)
 
         return {
@@ -87,21 +90,25 @@ class BaseOptimizer(ABC):
         ast_data,
         variables: List[CNVariable],
         t: int
-    ) -> Tuple[List[decimal.Decimal], decimal.Decimal]:
-        current_grads = [grad.evaluate(self.precision_digits).middle for grad in ast_data]
-        max_grad_norm = max(abs(g) for g in current_grads) if current_grads else decimal.Decimal(0)
-        return current_grads, max_grad_norm
+    ) -> Tuple[List[decimal.Decimal], decimal.Decimal, bool]:
+        current_grads_intervals = [grad.evaluate(self.precision_digits) for grad in ast_data]
+        current_grads_mid = [g.middle for g in current_grads_intervals]
+        max_grad_norm = max(g.magnitude for g in current_grads_intervals) if current_grads_intervals else decimal.Decimal(0)
+        
+        is_perfect_stop = all(g.low <= 0 <= g.high for g in current_grads_intervals)
+        
+        return current_grads_mid, max_grad_norm, is_perfect_stop
 
     def _take_step(
         self,
         variables: List[CNVariable],
         steps: List[decimal.Decimal]
-    ) -> List[float]:
+    ) -> List[decimal.Decimal]:
         new_point = []
         for i, var in enumerate(variables):
             new_val = var.val - steps[i]
             var.set_val(str(new_val))
-            new_point.append(float(new_val))
+            new_point.append(new_val)
         return new_point
 
 
@@ -129,13 +136,12 @@ class KieferWolfowitzOptimizer(BaseOptimizer):
 
     def _compute_gradients(
         self, 
-        target_func: ConstructiveNumber, 
+        target_func: ConstructiveNumber,
         variables: List[CNVariable], 
         t: int
-    ) -> Tuple[List[decimal.Decimal], decimal.Decimal]:
+    ) -> Tuple[List[decimal.Decimal], decimal.Decimal, bool]:
         n_vars = len(variables)
         estimated_grads = []
-        
         c_t = self.c / (decimal.Decimal(t) ** decimal.Decimal('0.25'))
 
         for i in range(n_vars):
@@ -153,7 +159,8 @@ class KieferWolfowitzOptimizer(BaseOptimizer):
             estimated_grads.append(grad_est)
 
         max_grad_norm = max(abs(g) for g in estimated_grads) if estimated_grads else decimal.Decimal(0)
-        return estimated_grads, max_grad_norm
+        
+        return estimated_grads, max_grad_norm, False
 
     def _calculate_steps(
         self, 
@@ -165,8 +172,16 @@ class KieferWolfowitzOptimizer(BaseOptimizer):
 
 
 class GradientDescent(BaseOptimizer):
+    def __init__(
+        self,
+        clip_value: float = 100.0,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.clip_value = decimal.Decimal(str(clip_value))
+
     def _initialize(
-        self, 
+        self,
         variables: List[CNVariable]
     ) -> None:
         pass
@@ -174,7 +189,17 @@ class GradientDescent(BaseOptimizer):
     def _calculate_steps(
         self, gradients: List[decimal.Decimal], t: int
     ) -> List[decimal.Decimal]:
-        return [self.lr * g for g in gradients]
+        steps = []
+        for g in gradients:
+            if g > self.clip_value:
+                g_clipped = self.clip_value
+            elif g < -self.clip_value:
+                g_clipped = -self.clip_value
+            else:
+                g_clipped = g
+                
+            steps.append(self.lr * g_clipped)
+        return steps
 
 
 class MomentumGradientDescent(BaseOptimizer):

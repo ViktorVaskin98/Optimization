@@ -37,7 +37,8 @@ def run_experiment(
         )
 
 if __name__ == "__main__":
-    decimal.getcontext().prec = 25
+    precision = 100
+    decimal.getcontext().prec = precision
 
     # ========================================================
     # ЭКСПЕРИМЕНТ 1: ФУНКЦИЯ РОЗЕНБРОКА
@@ -46,10 +47,10 @@ if __name__ == "__main__":
     rosenbrock_true_opt = [1.0, 1.0]
 
     rosen_optimizers = {
-        "Adam": AdamOptimizer(learning_rate=0.05, max_iter=5000, tolerance=0),
-        "Momentum": MomentumGradientDescent(learning_rate=0.01, momentum=0.9, max_iter=5000, tolerance=0),
-        "Vanilla_GD": GradientDescent(learning_rate=0.005, max_iter=5000, tolerance=0),
-        "Kiefer_Wolfowitz": KieferWolfowitzOptimizer(learning_rate=0.05, c=0.01, max_iter=5000, tolerance=0) 
+        "Adam": AdamOptimizer(epsilon=1e-2, learning_rate=0.0005, max_iter=10000, tolerance=0, precision_digits=precision),
+        "Momentum": MomentumGradientDescent(learning_rate=0.01, momentum=0.9, max_iter=10000, tolerance=0, precision_digits=precision),
+        "Vanilla_GD": GradientDescent(learning_rate=0.002, max_iter=30000, tolerance=0, precision_digits=precision),
+        "Kiefer_Wolfowitz": KieferWolfowitzOptimizer(learning_rate=0.05, c=0.01, max_iter=10000, tolerance=0, precision_digits=precision)
     }
 
     run_experiment(
@@ -68,8 +69,8 @@ if __name__ == "__main__":
     dixon_true_opt = [1.0, 0.707106]
 
     dixon_optimizers = {
-    "Adam": AdamOptimizer(learning_rate=0.01, max_iter=5000, tolerance=0),
-    "Momentum": MomentumGradientDescent(learning_rate=0.005, momentum=0.95, max_iter=5000, tolerance=0)
+        "Adam": AdamOptimizer(epsilon=1e-10, learning_rate=0.01, max_iter=10000, tolerance=0, precision_digits=precision),
+        "Momentum": MomentumGradientDescent(learning_rate=0.005, momentum=0.95, max_iter=10000, tolerance=0, precision_digits=precision),
     }
 
     run_experiment(

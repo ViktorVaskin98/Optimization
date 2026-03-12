@@ -28,7 +28,7 @@ class OptimizationVisualizer:
         padding: float = 0.5,
         resolution: int = 200
     ) -> Tuple[np.ndarray, np.ndarray]:
-        path_np = np.array(path)
+        path_np = np.array(path, dtype=float)
         x_min, x_max = path_np[:, 0].min(), path_np[:, 0].max()
         y_min, y_max = path_np[:, 1].min(), path_np[:, 1].max()
 
@@ -67,7 +67,8 @@ class OptimizationVisualizer:
     def plot_optimization_path(
         self,
         point_history: List[List[float]], 
-        func_np: Callable, true_optimum: List[float], 
+        func_np: Callable, 
+        true_optimum: List[float], 
         filename: str = "path_2d.png"
     ) -> None:
         if len(point_history[0]) > 2:
@@ -83,15 +84,16 @@ class OptimizationVisualizer:
         plt.contourf(X, Y, Z, levels=levels, cmap='Blues', alpha=0.6, locator=plt.matplotlib.ticker.LogLocator())
         plt.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5, alpha=0.3)
 
-        path_np = np.array(point_history)
+        path_np = np.array(point_history, dtype=float)
         xs = path_np[:, 0]
         ys = path_np[:, 1]
+        
+        opt_x, opt_y = float(true_optimum[0]), float(true_optimum[1])
 
         plt.plot(xs, ys, color='crimson', marker='o', linestyle='-', linewidth=2, markersize=4, label='Траектория оптимизатора')
         plt.plot(xs[0], ys[0], 'go', markersize=10, label='Старт', markeredgecolor='black')
         plt.plot(xs[-1], ys[-1], 'r*', markersize=15, label='Финиш (Оптимум)', markeredgecolor='black')
-        plt.plot(true_optimum[0], true_optimum[1], '*', color='gold', markersize=18, label='Истинный минимум', markeredgecolor='black')
-
+        plt.plot(opt_x, opt_y, '*', color='gold', markersize=18, label='Истинный минимум', markeredgecolor='black')
 
         plt.title("Траектория спуска (Контурный график)")
         plt.xlabel("X")
@@ -108,13 +110,16 @@ class OptimizationVisualizer:
         loss_history: List[float], 
         filename: str = "loss_history.png"
     ) -> None:
+        loss_float = [float(val) for val in loss_history]
+        
         plt.figure(figsize=(10, 5))
-        plt.plot(loss_history, color='darkorange', linewidth=2.5)
+        plt.plot(loss_float, color='darkorange', linewidth=2.5)
         
         plt.title("Сходимость функции (Loss vs Iteration)")
         plt.xlabel("Итерация")
         plt.ylabel("Значение функции f(x)")
-        plt.yscale('log') 
+        
+        plt.yscale('symlog', linthresh=1e-15) 
         plt.grid(True, which="both", ls="--", alpha=0.5)
 
         filepath = os.path.join(self.save_dir, filename)
@@ -127,8 +132,8 @@ class OptimizationVisualizer:
         true_optimum: List[float], 
         filename: str = "distance_history.png"
     ) -> None:
-        path_np = np.array(point_history)
-        optimum_np = np.array(true_optimum)
+        path_np = np.array(point_history, dtype=float)
+        optimum_np = np.array(true_optimum, dtype=float)
     
         distances = np.linalg.norm(path_np - optimum_np, axis=1)
 
